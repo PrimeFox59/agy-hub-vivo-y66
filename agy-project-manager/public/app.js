@@ -3284,15 +3284,23 @@ function renderQuickTunnels(tunnels) {
 
 // ==================== 1-CLICK QUICK TUNNEL SELECTOR & HELPERS ====================
 
-function openQuickTunnelModal(targetPort = null, targetName = null) {
+async function openQuickTunnelModal(targetPort = null, targetName = null) {
   const alertEl = document.getElementById('quickTunnelAlert');
   if (alertEl) alertEl.classList.add('hidden');
 
-  populateQuickTunnelAppOptions(targetPort, targetName);
+  try {
+    if (!clientAppsCache || !clientAppsCache.length) {
+      const res = await fetch(`${API_URL}/client-apps`, { headers: getAuthHeader() });
+      const data = await res.json();
+      clientAppsCache = data.apps || [];
+    }
+  } catch (_) {}
+
+  await populateQuickTunnelAppOptions(targetPort, targetName);
   openModal('quickTunnelModal');
 }
 
-function populateQuickTunnelAppOptions(targetPort = null, targetName = null) {
+async function populateQuickTunnelAppOptions(targetPort = null, targetName = null) {
   const selectEl = document.getElementById('quickTunnelAppSelect');
   const gridEl = document.getElementById('quickTunnelUntunneledGrid');
   const portInput = document.getElementById('quickTunnelPortInput');
@@ -3301,8 +3309,37 @@ function populateQuickTunnelAppOptions(targetPort = null, targetName = null) {
   // Find active quick tunnel ports
   const activePorts = new Set((cloudflareDataCache?.quick_tunnels || []).filter(t => t.status === 'connected').map(t => t.port));
 
-  // Gather untunneled apps from clientAppsCache
-  const untunneledApps = (clientAppsCache || []).filter(app => !activePorts.has(app.internal_port));
+  // Combine clientAppsCache with PM2 services from metrics
+  let pm2List = [];
+  try {
+    if (vpsMetricsCache?.pm2) {
+      pm2List = vpsMetricsCache.pm2;
+    } else {
+      const res = await fetch(`${API_URL}/vps/metrics`, { headers: getAuthHeader() });
+      const data = await res.json();
+      pm2List = data.pm2 || [];
+    }
+  } catch (_) {}
+
+  const combinedApps = [...(clientAppsCache || [])];
+
+  // Merge any standalone PM2 services
+  pm2List.forEach(pm => {
+    if (!combinedApps.some(a => a.pm2_service_name === pm.name)) {
+      const defaultPort = pm.name === 'quorra-learning-space' ? 5000 : (pm.name === 'pakarti-riken-report' ? 8562 : (pm.name === 'agy-telegram-bot' ? 8080 : 5678));
+      combinedApps.push({
+        id: `pm2_${pm.name}`,
+        name: pm.name.toUpperCase(),
+        internal_port: defaultPort,
+        pm2_service_name: pm.name,
+        client_name: 'PM2 Service',
+        icon: 'fa-cube'
+      });
+    }
+  });
+
+  // Gather untunneled apps
+  const untunneledApps = combinedApps.filter(app => !activePorts.has(app.internal_port));
 
   if (selectEl) {
     let optionsHtml = '<option value="">-- Pilih Aplikasi / Service Terdaftar --</option>';
@@ -3327,7 +3364,7 @@ function populateQuickTunnelAppOptions(targetPort = null, targetName = null) {
         const pm2Label = app.pm2_service_name ? `PM2: ${app.pm2_service_name}` : 'Standalone';
         const isSelected = targetPort && targetPort === app.internal_port;
         return `
-          <button type="button" onclick="setQuickPort(${app.internal_port}, '${escapeAttr(app.name)}', ${app.id})" class="quick-app-card p-2.5 rounded-xl text-left transition flex items-center gap-2.5 border ${isSelected ? 'bg-amber-500/20 border-amber-500/50 text-white shadow-md' : 'bg-slate-900/80 hover:bg-slate-800 border-slate-800 hover:border-amber-500/40 text-slate-300'} group cursor-pointer active:scale-95">
+          <button type="button" onclick="setQuickPort(${app.internal_port}, '${escapeAttr(app.name)}', '${escapeAttr(app.id)}')" class="quick-app-card p-2.5 rounded-xl text-left transition flex items-center gap-2.5 border ${isSelected ? 'bg-amber-500/20 border-amber-500/50 text-white shadow-md' : 'bg-slate-900/80 hover:bg-slate-800 border-slate-800 hover:border-amber-500/40 text-slate-300'} group cursor-pointer active:scale-95">
             <div class="w-8 h-8 rounded-lg bg-slate-800 text-amber-400 flex items-center justify-center shrink-0 border border-slate-700">
               <i class="fa-solid ${escapeAttr(icon)} text-xs"></i>
             </div>
@@ -3364,7 +3401,7 @@ function onQuickTunnelAppSelected(appId) {
     if (nameInput) nameInput.value = '';
     return;
   }
-  const app = (clientAppsCache || []).find(a => a.id === parseInt(appId, 10));
+  const app = (clientAppsCache || []).find(a => String(a.id) === String(appId));
   if (app) {
     setQuickPort(app.internal_port, app.name, app.id);
   }
