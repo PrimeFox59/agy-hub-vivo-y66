@@ -1642,8 +1642,28 @@ def api_cloudflare_overview():
     masked_token = (raw_token[:4] + '••••••••' + raw_token[-4:]) if len(raw_token) > 8 else ('••••••••' if raw_token else '')
 
     quick_tunnels = []
-    for k, t in _running_quick_tunnels.items():
-        quick_tunnels.append(t)
+    for p, t in _active_tunnels.items():
+        quick_tunnels.append({
+            'id': f"qt_{p}",
+            'port': p,
+            'name': t.get('name', f"Port {p}"),
+            'status': 'connected' if t.get('url') else 'starting',
+            'targetUrl': f"http://127.0.0.1:{p}",
+            'url': t.get('url', ''),
+            'autoPublish': True
+        })
+
+    for r in saved_rows:
+        if r.get('last_url') and not any(qt['port'] == r['port'] for qt in quick_tunnels):
+            quick_tunnels.append({
+                'id': f"qt_{r['port']}",
+                'port': r['port'],
+                'name': r['name'],
+                'status': 'connected',
+                'targetUrl': f"http://127.0.0.1:{r['port']}",
+                'url': r['last_url'],
+                'autoPublish': bool(r['auto_publish'])
+            })
 
     saved_tunnels = []
     for r in saved_rows:
@@ -1715,68 +1735,35 @@ def api_cloudflare_quicktunnel_start():
     name = data.get('name', f"Port {port}")
     auto_pub = bool(data.get('auto_publish', True))
 
-    bin_path = find_cloudflared()
-    if not bin_path:
-        return jsonify({'error': 'Binary cloudflared tidak ditemukan di sistem'}), 400
-
+    url = _start_cf_quick_tunnel(port, name)
     conn = get_db()
     with conn:
         conn.execute("""
-        INSERT INTO cloudflare_tunnels (port, name, auto_publish, target_url)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO cloudflare_tunnels (port, name, auto_publish, last_url, target_url)
+        VALUES (?, ?, ?, ?, ?)
         ON CONFLICT(port) DO UPDATE SET
             name = excluded.name,
             auto_publish = excluded.auto_publish,
+            last_url = excluded.last_url,
             updated_at = CURRENT_TIMESTAMP
-        """, (port, name, 1 if auto_pub else 0, f"http://localhost:{port}"))
+        """, (port, name, 1 if auto_pub else 0, url, f"http://127.0.0.1:{port}"))
+        conn.execute("UPDATE client_apps SET public_url = ? WHERE internal_port = ?", (url, port))
     conn.close()
 
-    def _run_tunnel():
-        try:
-            cmd = [bin_path, 'tunnel', '--url', f'http://127.0.0.1:{port}']
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-            _running_quick_tunnels[port] = {
-                'id': f"qt-{port}",
-                'port': port,
-                'name': name,
-                'status': 'starting',
-                'targetUrl': f"http://localhost:{port}",
-                'url': '',
-                'autoPublish': auto_pub,
-                'pid': proc.pid
-            }
-            for line in iter(proc.stdout.readline, ''):
-                if 'trycloudflare.com' in line:
-                    for w in line.split():
-                        if 'trycloudflare.com' in w:
-                            clean_url = w.strip().rstrip(',').rstrip('.')
-                            if not clean_url.startswith('http'):
-                                clean_url = 'https://' + clean_url
-                            _running_quick_tunnels[port]['url'] = clean_url
-                            _running_quick_tunnels[port]['status'] = 'connected'
-                            c = get_db()
-                            with c:
-                                c.execute("UPDATE cloudflare_tunnels SET last_url = ? WHERE port = ?", (clean_url, port))
-                                c.execute("UPDATE client_apps SET public_url = ? WHERE internal_port = ?", (clean_url, port))
-                            c.close()
-                            break
-        except Exception:
-            if port in _running_quick_tunnels:
-                _running_quick_tunnels[port]['status'] = 'error'
-
-    import threading
-    t = threading.Thread(target=_run_tunnel, daemon=True)
-    t.start()
-
-    time.sleep(1.5)
-    tunnel_obj = _running_quick_tunnels.get(port, {
+    tunnel_obj = {
         'id': f"qt-{port}",
         'port': port,
         'name': name,
-        'status': 'starting',
-        'targetUrl': f"http://localhost:{port}",
-        'url': '',
+        'status': 'connected' if url else 'starting',
+        'targetUrl': f"http://127.0.0.1:{port}",
+        'url': url,
         'autoPublish': auto_pub
+    }
+
+    return jsonify({
+        'success': True,
+        'message': f"Quick Tunnel untuk port {port} berhasil dimulai",
+        'tunnel': tunnel_obj
     })
 
     return jsonify({

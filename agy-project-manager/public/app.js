@@ -3211,7 +3211,7 @@ function renderQuickTunnels(tunnels) {
           <h5 class="text-sm font-semibold text-slate-300">Belum ada Quick Tunnel yang aktif</h5>
           <p class="text-xs text-slate-500 max-w-sm mx-auto mt-1">Publikasikan port aplikasi lokal ke internet secara instan dalam 1 klik.</p>
         </div>
-        <button type="button" onclick="openModal('quickTunnelModal')" title="Buka Quick Tunnel" class="p-2.5 bg-slate-800 hover:bg-slate-700 text-amber-400 hover:text-amber-300 rounded-xl border border-slate-700 transition inline-flex items-center justify-center cursor-pointer active:scale-95 shadow-sm">
+        <button type="button" onclick="openQuickTunnelModal()" title="Buka Quick Tunnel" class="p-2.5 bg-slate-800 hover:bg-slate-700 text-amber-400 hover:text-amber-300 rounded-xl border border-slate-700 transition inline-flex items-center justify-center cursor-pointer active:scale-95 shadow-sm">
           <i class="fa-solid fa-plus text-sm"></i>
         </button>
       </div>
@@ -3635,6 +3635,21 @@ async function handleVerifyCfToken() {
     }
   }
 }
+
+// Cloudflare Global Window Exports
+window.openQuickTunnelModal = openQuickTunnelModal;
+window.populateQuickTunnelAppOptions = populateQuickTunnelAppOptions;
+window.onQuickTunnelAppSelected = onQuickTunnelAppSelected;
+window.setQuickPort = setQuickPort;
+window.handleStartQuickTunnel = handleStartQuickTunnel;
+window.handleStopQuickTunnel = handleStopQuickTunnel;
+window.handleStopAllQuickTunnels = handleStopAllQuickTunnels;
+window.toggleTunnelAutoPublish = toggleTunnelAutoPublish;
+window.handleServiceAction = handleServiceAction;
+window.handleSaveCfSettings = handleSaveCfSettings;
+window.handleVerifyCfToken = handleVerifyCfToken;
+window.loadCloudflareOverview = loadCloudflareOverview;
+window.renderQuickTunnels = renderQuickTunnels;
 
 function copyToClipboard(text, btnEl) {
   navigator.clipboard.writeText(text).then(() => {
