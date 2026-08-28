@@ -522,6 +522,10 @@ def api_agy_accounts():
             conn.close()
             return jsonify({'error': 'Nama akun wajib diisi'}), 400
 
+        # Auto format if user entered plain Gemini API key
+        if token_json and isinstance(token_json, str) and token_json.startswith('AIzaSy'):
+            token_json = json.dumps({'api_key': token_json.strip(), 'auth_method': 'api_key'})
+
         with conn:
             if set_active:
                 conn.execute("UPDATE agy_accounts SET is_active = 0")
@@ -532,7 +536,7 @@ def api_agy_accounts():
             aid = cur.lastrowid
             row = conn.execute("SELECT * FROM agy_accounts WHERE id = ?", (aid,)).fetchone()
         conn.close()
-        return jsonify({'message': 'Akun AGY berhasil ditambahkan', 'account': dict(row)})
+        return jsonify({'message': 'Akun AGY / Gemini berhasil ditambahkan', 'account': dict(row)})
 
 @app.route('/api/agy/accounts/<int:aid>', methods=['PUT', 'DELETE'])
 def api_agy_account_detail(aid):
