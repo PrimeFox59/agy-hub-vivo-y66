@@ -13,6 +13,8 @@ let activeDelegatingTaskId = null;
 let cpuChartInstance = null;
 let ramChartInstance = null;
 let vpsPollInterval = null;
+var clientAppsCache = [];
+var currentPortalCategory = 'all';
 
 // ==================== INITIALIZATION ====================
 
@@ -4252,9 +4254,6 @@ window.filterTaskBySession = filterTaskBySession;
 window.filterOrchestratorKanbanBySession = filterOrchestratorKanbanBySession;
 
 // ==================== CLIENT PORTAL & APP GATEWAY ====================
-
-let clientAppsCache = [];
-let currentPortalCategory = 'all';
 
 async function loadClientPortal() {
   try {
