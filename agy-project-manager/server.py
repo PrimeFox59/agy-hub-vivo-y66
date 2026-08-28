@@ -246,7 +246,8 @@ def init_db():
             default_apps = [
                 ('AGY Integration Hub & Control Center', 'Homeserver Core Hub', 'admin@prime2026.local', 'AI & Automation', 'fa-brain', 5678, 'agy-project-manager', 'Web Dashboard, AGY Agent Orchestrator & Multi-Account Pool'),
                 ('Daily Report System', 'PT Pakarti Riken Indonesia', 'qa@pakarti-riken.co.id', 'Corporate ERP & Reporting', 'fa-chart-line', 8562, 'pakarti-riken-report', 'Automated Daily Production, OEE & QA Reporting System'),
-                ('AGY Telegram Bot Bridge', 'Telegram Notification Bot', 'bot@prime2026.local', 'Notification & Bot', 'fa-paper-plane', 8080, 'agy-telegram-bot', 'Real-time Homeserver Telemetry, Alerts & Bot Interface')
+                ('AGY Telegram Bot Bridge', 'Telegram Notification Bot', 'bot@prime2026.local', 'Notification & Bot', 'fa-paper-plane', 8080, 'agy-telegram-bot', 'Real-time Homeserver Telemetry, Alerts & Bot Interface'),
+                ('QUORRA SPACE', 'Quorra Science & AI Station', 'astronaut@quorra.space', 'EdTech & AI LMS', 'fa-rocket', 5000, 'quorra-learning-space', 'Stasiun Pembelajaran Interaktif Sains & AI (Astrofisika & Robotika)')
             ]
             for n, c, ce, cat, ic, port, pm2_svc, d in default_apps:
                 conn.execute("""
@@ -1036,6 +1037,16 @@ def api_vps_metrics():
             'status': 'online',
             'cpu': 0.1,
             'memory': 4 * 1024 * 1024,
+            'uptime': uptime_sec,
+            'restarts': 0,
+            'user': 'root'
+        },
+        {
+            'id': 4,
+            'name': 'quorra-learning-space',
+            'status': 'online',
+            'cpu': max(0.4, round(cpu_usage * 0.2, 1)),
+            'memory': 32 * 1024 * 1024,
             'uptime': uptime_sec,
             'restarts': 0,
             'user': 'root'
