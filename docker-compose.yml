@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  agy-orchestrator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: agy-orchestrator-pro
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - PORT=5678
+      - JWT_SECRET=change-this-to-a-super-secret-jwt-key-2026!
+      - WORKSPACE_DIR=/app/workspace
+      - NODE_ENV=production
+    volumes:
+      - ./data:/app/agy-project-manager/data
+      - ./workspace:/app/workspace
+      - ./agy-telegram-bot/config.json:/app/agy-telegram-bot/config.json
+      - ~/.gemini/antigravity-cli:/root/.gemini/antigravity-cli
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5678/api/auth/me"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

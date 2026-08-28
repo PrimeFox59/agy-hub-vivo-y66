@@ -1,0 +1,11 @@
+{
+    "bot_token": "YOUR_TELEGRAM_BOT_TOKEN_HERE",
+    "allowed_users": [],
+    "workspace_dir": "",
+    "dangerously_skip_permissions": true,
+    "request_timeout_seconds": 300,
+    "default_effort": "low",
+    "default_model": "",
+    "disable_slash_commands": true,
+    "stream_progress": true
+}

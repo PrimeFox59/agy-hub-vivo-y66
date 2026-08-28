@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# Environment and Secret Files
+.env
+.env.local
+config.json
+*.pem
+*.key
+antigravity-oauth-token*
+
+# SQLite Database Files
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+data/*.sqlite*
+
+# Logs and Temp
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+.pm2/
+downloads/
+temp/
+tmp/
+.DS_Store
+Thumbs.db
+.codegraph/
