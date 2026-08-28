@@ -3307,18 +3307,14 @@ async function populateQuickTunnelAppOptions(targetPort = null, targetName = nul
   const nameInput = document.getElementById('quickTunnelNameInput');
 
   // Find active quick tunnel ports
-  const activePorts = new Set((cloudflareDataCache?.quick_tunnels || []).filter(t => t.status === 'connected').map(t => t.port));
+  const activePorts = new Set((currentQuickTunnels || []).filter(t => t && (t.status === 'connected' || t.status === 'starting')).map(t => parseInt(t.port, 10)));
 
   // Combine clientAppsCache with PM2 services from metrics
   let pm2List = [];
   try {
-    if (vpsMetricsCache?.pm2) {
-      pm2List = vpsMetricsCache.pm2;
-    } else {
-      const res = await fetch(`${API_URL}/vps/metrics`, { headers: getAuthHeader() });
-      const data = await res.json();
-      pm2List = data.pm2 || [];
-    }
+    const res = await fetch(`${API_URL}/vps/metrics`, { headers: getAuthHeader() });
+    const data = await res.json();
+    pm2List = data.pm2 || [];
   } catch (_) {}
 
   const combinedApps = [...(clientAppsCache || [])];

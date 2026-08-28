@@ -1087,19 +1087,25 @@ def _start_cf_quick_tunnel(port, name='App'):
 
     log_path = f"/tmp/cf_tunnel_{port}.log"
     try:
+        if os.path.exists(log_path):
+            os.remove(log_path)
+    except Exception:
+        pass
+
+    try:
         subprocess.run(f"pkill -f 'cloudflared.*{port}'", shell=True, timeout=2)
     except Exception:
         pass
 
-    cmd = f"/usr/local/bin/cloudflared tunnel --url http://127.0.0.1:{port} > {log_path} 2>&1 &"
+    cmd = f"/usr/local/bin/cloudflared tunnel --url http://127.0.0.1:{port} --no-autoupdate > {log_path} 2>&1 &"
     subprocess.Popen(cmd, shell=True)
 
     found_url = None
-    for _ in range(16):
+    for _ in range(40):
         time.sleep(0.5)
         if os.path.exists(log_path):
             try:
-                with open(log_path, 'r') as f:
+                with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
                     content = f.read()
                     matches = re.findall(r'https://[a-zA-Z0-9-]+\.trycloudflare\.com', content)
                     if matches:
@@ -1109,7 +1115,7 @@ def _start_cf_quick_tunnel(port, name='App'):
                 pass
 
     if not found_url:
-        found_url = f"https://tunnel-{port}-vivo.trycloudflare.com"
+        raise Exception(f"Timeout (20s) menunggu alokasi URL publik dari Cloudflare Edge untuk port {port}. Silakan coba kembali.")
 
     _active_tunnels[port] = {
         'url': found_url,
