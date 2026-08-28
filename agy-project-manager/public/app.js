@@ -298,6 +298,9 @@ function showApp() {
   initSocket();
   loadClientPortal();
 
+  if (vpsPollInterval) clearInterval(vpsPollInterval);
+  vpsPollInterval = setInterval(loadVpsMetrics, 3000);
+
   if (currentUser.role === 'client') {
     switchTab('portal');
   } else {
@@ -1176,16 +1179,14 @@ function updatePortalCardsLiveTelemetry(pm2List) {
 }
 
 async function loadVpsMetrics() {
-  if (socket && socket.connected) {
-    socket.emit('vps:refresh');
-    return;
-  }
   try {
     const res = await fetch(`${API_URL}/vps/metrics`, { headers: getAuthHeader() });
     if (!res.ok) return;
     const data = await res.json();
     renderVpsMetrics(data);
-  } catch (err) {}
+  } catch (err) {
+    console.error('Failed to load VPS metrics:', err);
+  }
 }
 
 let lastPm2Signature = '';
@@ -4283,6 +4284,7 @@ async function loadClientPortal() {
     }
 
     renderPortalAppsGrid(clientAppsCache);
+    loadVpsMetrics();
   } catch (err) {
     console.error('Error loading client portal:', err);
     const grid = document.getElementById('portalAppsGrid');
