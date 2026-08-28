@@ -3029,123 +3029,81 @@ function openOAuthWizard() {
   currentOAuthSessionId = null;
   const nameInput = document.getElementById('wizardAccountName');
   const emailInput = document.getElementById('wizardAccountEmail');
+  const apiKeyInput = document.getElementById('wizardApiKeyInput');
   const setActiveCheck = document.getElementById('wizardSetActiveCheck');
   const error1 = document.getElementById('wizardStep1Error');
-  const error2 = document.getElementById('wizardStep2Error');
-  const authCodeInput = document.getElementById('wizardAuthCodeInput');
 
-  error1.classList.add('hidden');
-  error2.classList.add('hidden');
+  if (error1) error1.classList.add('hidden');
 
   const nextNum = agyAccountsCache.length + 1;
-  nameInput.value = `Akun Cadangan ${nextNum}`;
-  emailInput.value = '';
-  setActiveCheck.checked = false;
-  authCodeInput.value = '';
-
-  document.getElementById('wizardStep1').classList.remove('hidden');
-  document.getElementById('wizardStep2').classList.add('hidden');
+  if (nameInput) nameInput.value = `Akun Cadangan ${nextNum}`;
+  if (emailInput) emailInput.value = '';
+  if (apiKeyInput) apiKeyInput.value = '';
+  if (setActiveCheck) setActiveCheck.checked = true;
 
   openModal('agyOAuthWizardModal');
 }
 
-// Listen for OAuth success from Google redirect popup
-window.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'AGY_OAUTH_SUCCESS') {
-    closeModal('agyOAuthWizardModal');
-    loadAgyAccounts();
-    alert(`✓ Akun Google "${event.data.account?.name || 'Google'}" berhasil dihubungkan ke pool fallback!`);
-  }
-});
-
-async function handleWizardStart() {
-  const name = document.getElementById('wizardAccountName').value.trim();
-  const email = document.getElementById('wizardAccountEmail').value.trim();
+async function handleWizardSaveApiKey() {
+  const name = document.getElementById('wizardAccountName')?.value.trim() || 'Akun Google';
+  const email = document.getElementById('wizardAccountEmail')?.value.trim() || '';
+  const apiKey = document.getElementById('wizardApiKeyInput')?.value.trim() || '';
+  const setActive = document.getElementById('wizardSetActiveCheck')?.checked || false;
   const errorEl = document.getElementById('wizardStep1Error');
   const btn = document.getElementById('wizardStartBtn');
 
-  errorEl.classList.add('hidden');
+  if (errorEl) errorEl.classList.add('hidden');
 
   if (!name) {
-    errorEl.textContent = 'Nama akun wajib diisi';
-    errorEl.classList.remove('hidden');
+    if (errorEl) {
+      errorEl.textContent = 'Nama akun wajib diisi';
+      errorEl.classList.remove('hidden');
+    }
     return;
   }
 
-  btn.disabled = true;
-  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i><span>Membuka Google OAuth...</span>';
-
-  try {
-    const res = await fetch(`${API_URL}/agy/auth/start-login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-      body: JSON.stringify({ name, email })
-    });
-
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Gagal memulai login');
-
-    currentOAuthSessionId = data.session_id;
-    const linkEl = document.getElementById('wizardAuthUrlLink');
-    linkEl.href = data.auth_url;
-
-    // Automatically open Google Login in a clean popup
-    const popup = window.open(data.auth_url, 'GoogleOAuthPopup', 'width=560,height=680,menubar=no,toolbar=no,location=yes');
-
-    // Transition to Step 2 as fallback / confirmation
-    document.getElementById('wizardStep1').classList.add('hidden');
-    document.getElementById('wizardStep2').classList.remove('hidden');
-  } catch (err) {
-    errorEl.textContent = err.message;
-    errorEl.classList.remove('hidden');
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = '<span>Login dengan Google</span><i class="fa-solid fa-arrow-right ml-1"></i>';
-  }
-}
-
-async function handleWizardComplete() {
-  if (!currentOAuthSessionId) return;
-
-  const auth_code = document.getElementById('wizardAuthCodeInput').value.trim();
-  const set_active = document.getElementById('wizardSetActiveCheck').checked;
-  const errorEl = document.getElementById('wizardStep2Error');
-  const btn = document.getElementById('wizardCompleteBtn');
-
-  errorEl.classList.add('hidden');
-
-  if (!auth_code) {
-    errorEl.textContent = 'Silakan tempelkan (paste) kode verifikasi dari Google terlebih dahulu.';
-    errorEl.classList.remove('hidden');
+  if (!apiKey) {
+    if (errorEl) {
+      errorEl.textContent = 'Google API Key wajib diisi. Silakan klik tombol "Buka Google AI Studio" di atas untuk menyalin API Key gratis Anda.';
+      errorEl.classList.remove('hidden');
+    }
     return;
   }
 
-  btn.disabled = true;
-  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i><span>Memverifikasi & Menyimpan...</span>';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i><span>Menghubungkan Akun...</span>';
+  }
 
   try {
-    const res = await fetch(`${API_URL}/agy/auth/complete-login`, {
+    const res = await fetch(`${API_URL}/agy/accounts`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
       body: JSON.stringify({
-        session_id: currentOAuthSessionId,
-        auth_code,
-        set_active
+        name,
+        email,
+        token_json: apiKey,
+        auto_fallback: 1,
+        set_active: setActive
       })
     });
 
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Gagal verifikasi token');
+    if (!res.ok) throw new Error(data.error || 'Gagal menyimpan akun');
 
     closeModal('agyOAuthWizardModal');
-    alert(data.message || 'Akun Google berhasil ditambahkan ke pool fallback!');
     loadAgyAccounts();
+    alert(`✓ Akun Google "${name}" (${email || 'Gemini API'}) berhasil dihubungkan dan berstatus READY!`);
   } catch (err) {
-    errorEl.textContent = err.message;
-    errorEl.classList.remove('hidden');
+    if (errorEl) {
+      errorEl.textContent = err.message;
+      errorEl.classList.remove('hidden');
+    }
   } finally {
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fa-solid fa-circle-check mr-1"></i><span>Verifikasi & Simpan Akun</span>';
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-circle-check text-sm"></i><span>Simpan & Hubungkan Akun</span>';
+    }
   }
 }
 
