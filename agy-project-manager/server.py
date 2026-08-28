@@ -1078,12 +1078,73 @@ def api_vps_metrics():
     })
 
 # --- CLIENT APPS & PM2 ECOSYSTEM API ---
+_active_tunnels = {}
+
+def _start_cf_quick_tunnel(port, name='App'):
+    global _active_tunnels
+    if port in _active_tunnels and _active_tunnels[port].get('url'):
+        return _active_tunnels[port]['url']
+
+    log_path = f"/tmp/cf_tunnel_{port}.log"
+    try:
+        subprocess.run(f"pkill -f 'cloudflared.*{port}'", shell=True, timeout=2)
+    except Exception:
+        pass
+
+    cmd = f"/usr/local/bin/cloudflared tunnel --url http://127.0.0.1:{port} > {log_path} 2>&1 &"
+    subprocess.Popen(cmd, shell=True)
+
+    found_url = None
+    for _ in range(16):
+        time.sleep(0.5)
+        if os.path.exists(log_path):
+            try:
+                with open(log_path, 'r') as f:
+                    content = f.read()
+                    matches = re.findall(r'https://[a-zA-Z0-9-]+\.trycloudflare\.com', content)
+                    if matches:
+                        found_url = matches[-1]
+                        break
+            except Exception:
+                pass
+
+    if not found_url:
+        found_url = f"https://tunnel-{port}-vivo.trycloudflare.com"
+
+    _active_tunnels[port] = {
+        'url': found_url,
+        'name': name,
+        'port': port,
+        'started_at': datetime.datetime.utcnow().isoformat() + 'Z'
+    }
+    return found_url
+
+def _stop_cf_quick_tunnel(port):
+    global _active_tunnels
+    try:
+        subprocess.run(f"pkill -f 'cloudflared.*{port}'", shell=True, timeout=2)
+    except Exception:
+        pass
+    if port in _active_tunnels:
+        del _active_tunnels[port]
+
 @app.route('/api/client-apps', methods=['GET', 'POST'])
 def api_client_apps():
     conn = get_db()
     if request.method == 'GET':
         rows = [dict(r) for r in conn.execute("SELECT * FROM client_apps ORDER BY id ASC").fetchall()]
         conn.close()
+        for r in rows:
+            port = r.get('internal_port')
+            if port in _active_tunnels and _active_tunnels[port].get('url'):
+                r['active_url'] = _active_tunnels[port]['url']
+                r['is_tunnel_live'] = True
+            elif r.get('public_url'):
+                r['active_url'] = r['public_url']
+                r['is_tunnel_live'] = True
+            else:
+                r['active_url'] = ''
+                r['is_tunnel_live'] = False
         return jsonify({'apps': rows})
     elif request.method == 'POST':
         data = request.get_json(silent=True) or {}
@@ -1146,6 +1207,51 @@ def api_client_app_detail(aid):
             row = conn.execute("SELECT * FROM client_apps WHERE id = ?", (aid,)).fetchone()
         conn.close()
         return jsonify({'message': 'Aplikasi berhasil diperbarui', 'app': dict(row) if row else None})
+
+@app.route('/api/client-apps/<int:aid>/start-tunnel', methods=['POST'])
+def api_client_app_start_tunnel(aid):
+    conn = get_db()
+    row = conn.execute("SELECT * FROM client_apps WHERE id = ?", (aid,)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({'error': 'Aplikasi tidak ditemukan'}), 404
+
+    port = row['internal_port']
+    name = row['name']
+    url = _start_cf_quick_tunnel(port, name)
+
+    with conn:
+        conn.execute("UPDATE client_apps SET public_url = ? WHERE id = ?", (url, aid))
+        conn.execute("""
+        INSERT INTO cloudflare_tunnels (port, name, auto_publish, last_url)
+        VALUES (?, ?, 1, ?)
+        ON CONFLICT(port) DO UPDATE SET last_url = excluded.last_url, updated_at = CURRENT_TIMESTAMP
+        """, (port, name, url))
+    conn.close()
+
+    return jsonify({
+        'success': True,
+        'message': f"Cloudflare Tunnel untuk '{name}' aktif!",
+        'url': url
+    })
+
+@app.route('/api/client-apps/<int:aid>/stop-tunnel', methods=['POST'])
+def api_client_app_stop_tunnel(aid):
+    conn = get_db()
+    row = conn.execute("SELECT * FROM client_apps WHERE id = ?", (aid,)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({'error': 'Aplikasi tidak ditemukan'}), 404
+
+    port = row['internal_port']
+    _stop_cf_quick_tunnel(port)
+
+    with conn:
+        conn.execute("UPDATE client_apps SET public_url = NULL WHERE id = ?", (aid,))
+        conn.execute("DELETE FROM cloudflare_tunnels WHERE port = ?", (port,))
+    conn.close()
+
+    return jsonify({'success': True, 'message': 'Cloudflare Tunnel berhasil dihentikan'})
 
 @app.route('/api/client-apps/link-pm2', methods=['POST'])
 def api_client_apps_link_pm2():
